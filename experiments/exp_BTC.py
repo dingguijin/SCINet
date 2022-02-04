@@ -39,7 +39,7 @@ class Exp_BTC(Exp_Basic):
             modified = True,
             RIN=self.args.RIN)
         print(model)
-        return model.double()
+        return model.double().cuda()
 
     def _get_data(self, flag):
         args = self.args
@@ -87,80 +87,47 @@ class Exp_BTC(Exp_Basic):
 
         preds = []
         trues = []
-        mids = []
         pred_scales = []
         true_scales = []
-        mid_scales = []
 
         for i, (batch_x, batch_y) in enumerate(valid_loader):
-            pred, pred_scale, mid, mid_scale, true, true_scale = self._process_one_batch_SCINet(valid_data, batch_x, batch_y)
+            pred, pred_scale, true, true_scale = self._process_one_batch_SCINet(valid_data, batch_x, batch_y)
 
-            if self.args.stacks == 1:
-                loss = criterion(pred.detach().cpu(), true.detach().cpu())
+            loss = criterion(pred.detach().cpu(), true.detach().cpu())
 
-                preds.append(pred.detach().cpu().numpy())
-                trues.append(true.detach().cpu().numpy())
-                pred_scales.append(pred_scale.detach().cpu().numpy())
-                true_scales.append(true_scale.detach().cpu().numpy())
-
-            elif self.args.stacks == 2:
-                loss = criterion(pred.detach().cpu(), true.detach().cpu()) + criterion(mid.detach().cpu(), true.detach().cpu())
-
-                preds.append(pred.detach().cpu().numpy())
-                trues.append(true.detach().cpu().numpy())
-                mids.append(mid.detach().cpu().numpy())
-                pred_scales.append(pred_scale.detach().cpu().numpy())
-                mid_scales.append(mid_scale.detach().cpu().numpy())
-                true_scales.append(true_scale.detach().cpu().numpy())
-
-            else:
-                print('Error!')
+            preds.append(pred.detach().cpu().numpy())
+            trues.append(true.detach().cpu().numpy())
+            pred_scales.append(pred_scale.detach().cpu().numpy())
+            true_scales.append(true_scale.detach().cpu().numpy())
 
             total_loss.append(loss)
         total_loss = np.average(total_loss)
 
-        if self.args.stacks == 1:
-            preds = np.array(preds)
-            trues = np.array(trues)
-            pred_scales = np.array(pred_scales)
-            true_scales = np.array(true_scales)
+        preds = np.array(preds)
+        trues = np.array(trues)
+        pred_scales = np.array(pred_scales)
+        true_scales = np.array(true_scales)
 
-            preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
-            trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
-            true_scales = true_scales.reshape(-1, true_scales.shape[-2], true_scales.shape[-1])
-            pred_scales = pred_scales.reshape(-1, pred_scales.shape[-2], pred_scales.shape[-1])
+        print("=================")
+        print(preds.shape)
+        print(trues.shape)
+        print("=================")
+        preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
+        trues = trues.reshape(-1, preds.shape[-2], preds.shape[-1])
+        true_scales = true_scales.reshape(-1, pred_scales.shape[-2], pred_scales.shape[-1])
+        pred_scales = pred_scales.reshape(-1, pred_scales.shape[-2], pred_scales.shape[-1])
 
-            mae, mse, rmse, mape, mspe, corr = metric(preds, trues)
-            maes, mses, rmses, mapes, mspes, corrs = metric(pred_scales, true_scales)
-            print('normed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mse, mae, rmse, mape, mspe, corr))
-            print('denormed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mses, maes, rmses, mapes, mspes, corrs))
-        elif self.args.stacks == 2:
-            preds = np.array(preds)
-            trues = np.array(trues)
-            mids = np.array(mids)
-            pred_scales = np.array(pred_scales)
-            true_scales = np.array(true_scales)
-            mid_scales = np.array(mid_scales)
-
-            preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
-            trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
-            mids = mids.reshape(-1, mids.shape[-2], mids.shape[-1])
-            true_scales = true_scales.reshape(-1, true_scales.shape[-2], true_scales.shape[-1])
-            pred_scales = pred_scales.reshape(-1, pred_scales.shape[-2], pred_scales.shape[-1])
-            mid_scales = mid_scales.reshape(-1, mid_scales.shape[-2], mid_scales.shape[-1])
-            # print('test shape:', preds.shape, mids.shape, trues.shape)
-
-            mae, mse, rmse, mape, mspe, corr = metric(mids, trues)
-            maes, mses, rmses, mapes, mspes, corrs = metric(mid_scales, true_scales)
-            print('mid --> normed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mse, mae, rmse, mape, mspe, corr))
-            print('mid --> denormed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mses, maes, rmses, mapes, mspes, corrs))
-
-            mae, mse, rmse, mape, mspe, corr = metric(preds, trues)
-            maes, mses, rmses, mapes, mspes, corrs = metric(pred_scales, true_scales)
-            print('final --> normed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mse, mae, rmse, mape, mspe, corr))
-            print('final --> denormed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mses, maes, rmses, mapes, mspes, corrs))
-        else:
-            print('Error!')
+        print("========== valid ============")
+        print("========== preds ============")
+        print(preds.shape)
+        print(preds)
+        print("========== trues ============")
+        print(trues.shape)
+        print(trues)
+        mae, mse, rmse, mape, mspe, corr = metric(preds, trues)
+        maes, mses, rmses, mapes, mspes, corrs = metric(pred_scales, true_scales)
+        print('normed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mse, mae, rmse, mape, mspe, corr))
+        print('denormed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mses, maes, rmses, mapes, mspes, corrs))
 
         return total_loss
 
@@ -196,16 +163,14 @@ class Exp_BTC(Exp_Basic):
             
             self.model.train()
             epoch_time = time.time()
-            for i, (batch_x,batch_y) in enumerate(train_loader):
+            for i, (batch_x, batch_y) in enumerate(train_loader):
                 iter_count += 1                
                 model_optim.zero_grad()
-                pred, pred_scale, mid, mid_scale, true, true_scale = self._process_one_batch_SCINet(train_data, batch_x, batch_y)
-                if self.args.stacks == 1:
-                    loss = criterion(pred, true)
-                elif self.args.stacks == 2:
-                    loss = criterion(pred, true) + criterion(mid, true)
-                else:
-                    print('Error!')
+                pred, pred_scale, true, true_scale = self._process_one_batch_SCINet(train_data, batch_x, batch_y)
+                # print("train pred: ", pred.shape)
+                # print("train true: ", true.shape)
+
+                loss = criterion(pred, true)
 
                 train_loss.append(loss.item())
                 
@@ -247,7 +212,7 @@ class Exp_BTC(Exp_Basic):
 
             lr = adjust_learning_rate(model_optim, epoch+1, self.args)
             
-        save_model(epoch, lr, self.model, path, model_name=self.args.data, horizon=self.args.pred_len)
+        save_model(epoch, lr, self.model, path, model_name="BTC", horizon=self.args.pred_len)
         best_model_path = path+'/'+'checkpoint.pth'
         self.model.load_state_dict(torch.load(best_model_path))
         return self.model
@@ -259,125 +224,73 @@ class Exp_BTC(Exp_Basic):
         
         preds = []
         trues = []
-        mids = []
         pred_scales = []
         true_scales = []
-        mid_scales = []
         
         if evaluate:
             path = os.path.join(self.args.checkpoints, setting)
             best_model_path = path+'/'+'checkpoint.pth'
             self.model.load_state_dict(torch.load(best_model_path))
 
-        for i, (batch_x,batch_y,batch_x_mark,batch_y_mark) in enumerate(test_loader):
-            pred, pred_scale, mid, mid_scale, true, true_scale = self._process_one_batch_SCINet(
-                test_data, batch_x, batch_y)
+        for i, (batch_x,batch_y) in enumerate(test_loader):
+            pred, pred_scale, true, true_scale = self._process_one_batch_SCINet(test_data, batch_x, batch_y)
+            preds.append(pred.detach().cpu().numpy())
+            trues.append(true.detach().cpu().numpy())
+            pred_scales.append(pred_scale.detach().cpu().numpy())
+            true_scales.append(true_scale.detach().cpu().numpy())
 
-            if self.args.stacks == 1:
-                preds.append(pred.detach().cpu().numpy())
-                trues.append(true.detach().cpu().numpy())
-                pred_scales.append(pred_scale.detach().cpu().numpy())
-                true_scales.append(true_scale.detach().cpu().numpy())
-            elif self.args.stacks == 2:
-                preds.append(pred.detach().cpu().numpy())
-                trues.append(true.detach().cpu().numpy())
-                mids.append(mid.detach().cpu().numpy())
-                pred_scales.append(pred_scale.detach().cpu().numpy())
-                mid_scales.append(mid_scale.detach().cpu().numpy())
-                true_scales.append(true_scale.detach().cpu().numpy())
+        preds = np.array(preds)
+        trues = np.array(trues)
 
-            else:
-                print('Error!')
+        pred_scales = np.array(pred_scales)
+        true_scales = np.array(true_scales)
 
-        if self.args.stacks == 1:
-            preds = np.array(preds)
-            trues = np.array(trues)
+        preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
+        trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
+        true_scales = true_scales.reshape(-1, true_scales.shape[-2], true_scales.shape[-1])
+        pred_scales = pred_scales.reshape(-1, pred_scales.shape[-2], pred_scales.shape[-1])
 
-            pred_scales = np.array(pred_scales)
-            true_scales = np.array(true_scales)
+        print("========== test ============")
+        print("========== preds ============")
+        print(preds)
+        print("========== trues ============")
+        print(trues)
+        mae, mse, rmse, mape, mspe, corr = metric(preds, trues)
+        maes, mses, rmses, mapes, mspes, corrs = metric(pred_scales, true_scales)
+        print('normed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mse, mae, rmse, mape, mspe, corr))
+        print('TTTT denormed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mses, maes, rmses, mapes, mspes, corrs))
 
-            preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
-            trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
-            true_scales = true_scales.reshape(-1, true_scales.shape[-2], true_scales.shape[-1])
-            pred_scales = pred_scales.reshape(-1, pred_scales.shape[-2], pred_scales.shape[-1])
-
-            mae, mse, rmse, mape, mspe, corr = metric(preds, trues)
-            maes, mses, rmses, mapes, mspes, corrs = metric(pred_scales, true_scales)
-            print('normed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mse, mae, rmse, mape, mspe, corr))
-            print('TTTT denormed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mses, maes, rmses, mapes, mspes, corrs))
-
-            # result save
-            if self.args.save:
-                folder_path = 'exp/ett_results/' + setting + '/'
-                if not os.path.exists(folder_path):
-                    os.makedirs(folder_path)
-
-                mae, mse, rmse, mape, mspe, corr = metric(preds, trues)
-                print('Test:mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mse, mae, rmse, mape, mspe, corr))
-
-                np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
-                np.save(folder_path + 'pred.npy', preds)
-                np.save(folder_path + 'true.npy', trues)
-                np.save(folder_path + 'pred_scales.npy', pred_scales)
-                np.save(folder_path + 'true_scales.npy', true_scales)
-                
-                np.savetxt(f'{folder_path}/pred.csv', preds[0], delimiter=",")
-                np.savetxt(f'{folder_path}/true.csv', trues[0], delimiter=",")
-                np.savetxt(f'{folder_path}/pred_scales.csv', pred_scales[0], delimiter=",")
-                np.savetxt(f'{folder_path}/true_scales.csv', true_scales[0], delimiter=",")
-
-        elif self.args.stacks == 2:
-            preds = np.array(preds)
-            trues = np.array(trues)
-            mids = np.array(mids)
-
-            pred_scales = np.array(pred_scales)
-            true_scales = np.array(true_scales)
-            mid_scales = np.array(mid_scales)
-
-            preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
-            trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
-            mids = mids.reshape(-1, mids.shape[-2], mids.shape[-1])
-            true_scales = true_scales.reshape(-1, true_scales.shape[-2], true_scales.shape[-1])
-            pred_scales = pred_scales.reshape(-1, pred_scales.shape[-2], pred_scales.shape[-1])
-            mid_scales = mid_scales.reshape(-1, mid_scales.shape[-2], mid_scales.shape[-1])
-            # print('test shape:', preds.shape, mids.shape, trues.shape)
-
-            mae, mse, rmse, mape, mspe, corr = metric(mids, trues)
-            maes, mses, rmses, mapes, mspes, corrs = metric(mid_scales, true_scales)
-            print('Mid --> normed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mse, mae, rmse, mape, mspe, corr))
+        # result save
+        if self.args.save:
+            folder_path = 'exp/ett_results/' + setting + '/'
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path)
 
             mae, mse, rmse, mape, mspe, corr = metric(preds, trues)
-            maes, mses, rmses, mapes, mspes, corrs = metric(pred_scales, true_scales)
-            print('TTTT Final --> denormed mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mse, mae, rmse, mape, mspe, corr))
+            print('Test:mse:{:.4f}, mae:{:.4f}, rmse:{:.4f}, mape:{:.4f}, mspe:{:.4f}, corr:{:.4f}'.format(mse, mae, rmse, mape, mspe, corr))
 
-        else:
-            print('Error!')
+            np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
+            np.save(folder_path + 'pred.npy', preds)
+            np.save(folder_path + 'true.npy', trues)
+            np.save(folder_path + 'pred_scales.npy', pred_scales)
+            np.save(folder_path + 'true_scales.npy', true_scales)
+            
+            np.savetxt(f'{folder_path}/pred.csv', preds[0], delimiter=",")
+            np.savetxt(f'{folder_path}/true.csv', trues[0], delimiter=",")
+            np.savetxt(f'{folder_path}/pred_scales.csv', pred_scales[0], delimiter=",")
+            np.savetxt(f'{folder_path}/true_scales.csv', true_scales[0], delimiter=",")
+
         return mae, maes, mse, mses
 
     def _process_one_batch_SCINet(self, dataset_object, batch_x, batch_y):
-        batch_x = batch_x.double()
-        # batch_x = batch_x.double().cuda()
-        batch_y = batch_y.double()
+        #batch_x = batch_x.double()
+        batch_x = batch_x.double().cuda()
+        batch_y = batch_y.double().cuda()
 
-        if self.args.stacks == 1:
-            outputs = self.model(batch_x)
-        elif self.args.stacks == 2:
-            outputs, mid = self.model(batch_x)
-        else:
-            print('Error!')
-
+        outputs = self.model(batch_x)
         outputs_scaled = dataset_object.inverse_transform(outputs)
-        if self.args.stacks == 2:
-            mid_scaled = dataset_object.inverse_transform(mid)
-        f_dim = 0
         # batch_y = batch_y[:,-self.args.pred_len:,f_dim:].cuda()
-        batch_y = batch_y[:,-self.args.pred_len:]        
+        batch_y = batch_y[:,-self.args.pred_len:].cuda()        
         batch_y_scaled = dataset_object.inverse_transform(batch_y)
 
-        if self.args.stacks == 1:
-            return outputs, outputs_scaled, 0,0, batch_y, batch_y_scaled
-        elif self.args.stacks == 2:
-            return outputs, outputs_scaled, mid, mid_scaled, batch_y, batch_y_scaled
-        else:
-            print('Error!')
+        return outputs, outputs_scaled, batch_y, batch_y_scaled

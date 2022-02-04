@@ -39,8 +39,11 @@ class Dataset_BTC(Dataset):
 
         self.scaler_x.fit(dfx.values)
         self.data_x = self.scaler_x.transform(dfx.values)
-        self.scaler_y.fit(dfy.values)
-        self.data_y = self.scaler_y.transform(dfy.values)
+        self.scaler_y = self.scaler_x
+        self.data_y = self.data_x
+        
+        # self.scaler_y.fit(dfy.values)
+        # self.data_y = self.scaler_y.transform(dfy.values)
         
     def __getitem__(self, index):
         s_begin = index
@@ -51,7 +54,7 @@ class Dataset_BTC(Dataset):
         seq_x = self.data_x[s_begin:s_end]
         seq_y = self.data_y[r_begin:r_end]
 
-        return seq_x, seq_y.reshape(-1, 1)
+        return seq_x, seq_y
     
     def __len__(self):
         return len(self.data_x) - self.seq_len - self.pred_len + 1

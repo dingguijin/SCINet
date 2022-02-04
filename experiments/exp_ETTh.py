@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import warnings
 warnings.filterwarnings('ignore')
-from data_process.etth_data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_Pred
+from data_process.etth_data_loader import Dataset_BTC_minute, Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_Pred
 from experiments.exp_basic import Exp_Basic
 from utils.tools import EarlyStopping, adjust_learning_rate, save_model, load_model
 from metrics.ETTh_metrics import metric
@@ -51,6 +51,7 @@ class Exp_ETTh(Exp_Basic):
         args = self.args
 
         data_dict = {
+            'BTC':Dataset_BTC_minute,
             'ETTh1':Dataset_ETT_hour,
             'ETTh2':Dataset_ETT_hour,
             'ETTm1':Dataset_ETT_minute,
