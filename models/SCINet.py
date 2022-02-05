@@ -48,6 +48,8 @@ class Interactor(nn.Module):
         modules_phi = []
         prev_size = 1
 
+        out_planes = in_planes
+
         size_hidden = self.hidden_size
         modules_P += [
             nn.ReplicationPad1d((pad_l, pad_r)),
@@ -57,8 +59,8 @@ class Interactor(nn.Module):
             nn.LeakyReLU(negative_slope=0.01, inplace=True),
 
             nn.Dropout(self.dropout),
-            nn.Conv1d(int(in_planes * size_hidden), in_planes,
-                      kernel_size=3, stride=1, groups= self.groups),
+            # nn.Conv1d(int(in_planes * size_hidden), in_planes, kernel_size=3, stride=1, groups= self.groups),
+            nn.Conv1d(int(in_planes * size_hidden), out_planes, kernel_size=3, stride=1, groups= self.groups),
             nn.Tanh()
         ]
         modules_U += [
@@ -67,8 +69,8 @@ class Interactor(nn.Module):
                       kernel_size=self.kernel_size, dilation=self.dilation, stride=1, groups= self.groups),
             nn.LeakyReLU(negative_slope=0.01, inplace=True),
             nn.Dropout(self.dropout),
-            nn.Conv1d(int(in_planes * size_hidden), in_planes,
-                      kernel_size=3, stride=1, groups= self.groups),
+            # nn.Conv1d(int(in_planes * size_hidden), in_planes, kernel_size=3, stride=1, groups= self.groups),
+            nn.Conv1d(int(in_planes * size_hidden), out_planes, kernel_size=3, stride=1, groups= self.groups),
             nn.Tanh()
         ]
 
@@ -78,8 +80,8 @@ class Interactor(nn.Module):
                       kernel_size=self.kernel_size, dilation=self.dilation, stride=1, groups= self.groups),
             nn.LeakyReLU(negative_slope=0.01, inplace=True),
             nn.Dropout(self.dropout),
-            nn.Conv1d(int(in_planes * size_hidden), in_planes,
-                      kernel_size=3, stride=1, groups= self.groups),
+            # nn.Conv1d(int(in_planes * size_hidden), in_planes, kernel_size=3, stride=1, groups= self.groups),
+            nn.Conv1d(int(in_planes * size_hidden), out_planes, kernel_size=3, stride=1, groups= self.groups),
             nn.Tanh()
         ]
         modules_psi += [
@@ -88,20 +90,26 @@ class Interactor(nn.Module):
                       kernel_size=self.kernel_size, dilation=self.dilation, stride=1, groups= self.groups),
             nn.LeakyReLU(negative_slope=0.01, inplace=True),
             nn.Dropout(self.dropout),
-            nn.Conv1d(int(in_planes * size_hidden), in_planes,
-                      kernel_size=3, stride=1, groups= self.groups),
+            # nn.Conv1d(int(in_planes * size_hidden), in_planes, kernel_size=3, stride=1, groups= self.groups),
+            nn.Conv1d(int(in_planes * size_hidden), out_planes, kernel_size=3, stride=1, groups= self.groups),
             nn.Tanh()
         ]
+        
         self.phi = nn.Sequential(*modules_phi)
         self.psi = nn.Sequential(*modules_psi)
         self.P = nn.Sequential(*modules_P)
         self.U = nn.Sequential(*modules_U)
 
     def forward(self, x):
+        # print("interactor x: ", x.shape)
+
         if self.splitting:
             (x_even, x_odd) = self.split(x)
         else:
             (x_even, x_odd) = x
+
+        # print("interactor x_even: ", x_even.shape)
+        # print("interactor x_odd: ", x_odd.shape)
 
         if self.modified:
             x_even = x_even.permute(0, 2, 1)
@@ -110,8 +118,17 @@ class Interactor(nn.Module):
             d = x_odd.mul(torch.exp(self.phi(x_even)))
             c = x_even.mul(torch.exp(self.psi(x_odd)))
 
+            # print("d: ", d.shape)
+            # print("c: ", c.shape)
+
             x_even_update = c + self.U(d)
             x_odd_update = d - self.P(c)
+
+            # x_odd_update = self.F(x_odd_update)
+            # x_even_update = self.F(x_even_update)
+            
+            # print("modify x_odd_update: ", x_odd_update.shape)
+            # print("modify x_even_update: ", x_even_update.shape)
 
             return (x_even_update, x_odd_update)
 
@@ -122,18 +139,20 @@ class Interactor(nn.Module):
             d = x_odd - self.P(x_even)
             c = x_even + self.U(d)
 
+            # print("x_odd: ", x_odd_update.shape)
+            # print("x_even: ", x_even_update.shape)
+
             return (c, d)
 
 
 class InteractorLevel(nn.Module):
     def __init__(self, in_planes, kernel, dropout, groups , hidden_size, INN):
         super(InteractorLevel, self).__init__()
-        self.level = Interactor(in_planes = in_planes, splitting=True,
-                 kernel = kernel, dropout=dropout, groups = groups, hidden_size = hidden_size, INN = INN)
+        self.level = Interactor(in_planes = in_planes, splitting=True, kernel = kernel, dropout=dropout, groups = groups, hidden_size = hidden_size, INN = INN)
 
     def forward(self, x):
-        (x_even_update, x_odd_update) = self.level(x)
-        return (x_even_update, x_odd_update)
+        x_even_update, x_odd_update = self.level(x)
+        return x_even_update, x_odd_update
 
 class LevelSCINet(nn.Module):
     def __init__(self,in_planes, kernel_size, dropout, groups, hidden_size, INN):
@@ -141,8 +160,15 @@ class LevelSCINet(nn.Module):
         self.interact = InteractorLevel(in_planes= in_planes, kernel = kernel_size, dropout = dropout, groups =groups , hidden_size = hidden_size, INN = INN)
 
     def forward(self, x):
-        (x_even_update, x_odd_update) = self.interact(x)
-        return x_even_update.permute(0, 2, 1), x_odd_update.permute(0, 2, 1) #even: B, T, D odd: B, T, D
+        x_even_update, x_odd_update = self.interact(x)
+        # print("x_even_update: ", x_even_update.shape)
+        # print("x_odd_update: ", x_odd_update.shape)
+
+        x_even, x_odd = x_even_update.permute(0, 2, 1), x_odd_update.permute(0, 2, 1) #even: B, T, D odd: B, T, D
+        # print("x_even: ", x_even.shape)
+        # print("x_odd: ", x_odd.shape)
+        
+        return x_even, x_odd
 
 class SCINet_Tree(nn.Module):
     def __init__(self, in_planes, current_level, kernel_size, dropout, groups, hidden_size, INN):
@@ -200,7 +226,9 @@ class EncoderTree(nn.Module):
         
     def forward(self, x):
 
+        # print("Tree input shape:", x.shape)
         x= self.SCINet_Tree(x)
+        # print("Tree output shape:", x.shape)
 
         return x
 
@@ -236,12 +264,12 @@ class SCINet(nn.Module):
         if num_stacks == 2: # we only implement two stacks at most.
             self.blocks2 = EncoderTree(
                 in_planes=self.input_dim,
-            num_levels = self.num_levels,
-            kernel_size = self.kernel_size,
-            dropout = self.dropout,
-            groups = self.groups,
-            hidden_size = self.hidden_size,
-            INN =  modified)
+                num_levels = self.num_levels,
+                kernel_size = self.kernel_size,
+                dropout = self.dropout,
+                groups = self.groups,
+                hidden_size = self.hidden_size,
+                INN =  modified)
 
         self.stacks = num_stacks
 
